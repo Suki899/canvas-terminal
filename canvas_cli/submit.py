@@ -12,8 +12,8 @@ import os
 from urllib.parse import urljoin
 
 from .api import CanvasError, REDIRECTS
-from .courses import label
-from .util import colours, parse_time, relative, stamp
+from .courses import label, ref
+from .util import colours, emit, parse_time, relative, stamp
 
 UPLOAD = "online_upload"
 
@@ -135,9 +135,21 @@ def run(client, args, course, today):
     if found:
         raise CanvasError("Cannot submit. This assignment:\n  - " + "\n  - ".join(found))
 
-    describe(assignment, course, paths, today, cols)
+    due = parse_time(assignment.get("due_at"))
+    plan = {"assignment": {"id": assignment.get("id"), "name": (assignment.get("name") or "").strip(),
+                           "due_at": due, "url": assignment.get("html_url")},
+            "course": ref(course), "files": [{"path": p, "size": os.path.getsize(p)} for p in paths],
+            "late": due is not None and due < today,
+            "resubmission": bool((assignment.get("submission") or {}).get("submitted_at"))}
+    if args.json and not (args.dry_run or args.yes):
+        raise CanvasError("--json cannot ask for confirmation; add --dry-run to check, or --yes to submit.")
+    if not args.json:
+        describe(assignment, course, paths, today, cols)
     if args.dry_run:
-        print(f"\n{cols['dim']}--dry-run: nothing uploaded.{cols['off']}")
+        if args.json:
+            emit({**plan, "submitted": False})
+        else:
+            print(f"\n{cols['dim']}--dry-run: nothing uploaded.{cols['off']}")
         return
     if not args.yes and not confirm("\nSubmit this? [y/N] "):
         print("Not submitted.")
@@ -149,6 +161,10 @@ def run(client, args, course, today):
         data=[("submission[submission_type]", UPLOAD)]
         + [("submission[file_ids][]", str(i)) for i in ids]))
     when = parse_time(result.get("submitted_at")) or today
+    if args.json:
+        emit({**plan, "submitted": True, "submitted_at": when, "attempt": result.get("attempt"),
+              "marked_late": bool(result.get("late"))})
+        return
     print(f"\n{cols['green']}Submitted{cols['off']} {stamp(when)} "
           f"{cols['dim']}(attempt {result.get('attempt') or 1}){cols['off']}")
     if result.get("late"):

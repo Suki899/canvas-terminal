@@ -1,7 +1,9 @@
 # canvas-cli
 
-Your Canvas LMS courses from the terminal: what is due, new announcements,
-course pages, quizzes, a local copy of course files, and file submissions.
+Your Canvas LMS courses from the terminal: what is due, grades, announcements,
+modules, pages, the syllabus, discussions, your inbox, calendar events,
+quizzes, a local copy of course files, and file submissions. Every command can
+also print JSON for scripts.
 
 Works with any Canvas site that lets students create access tokens. Requires
 Python 3.10+ on Linux or macOS.
@@ -50,8 +52,14 @@ precedence over the saved login.
 | --- | --- |
 | `canvas` | Overdue work, the next 7 days, and this month's unread announcements |
 | `canvas todo` | Assignments: overdue, due soon, later. `--done`, `--all`, `--days N` |
+| `canvas grades` | Course totals (where the course shows them) and points per course. With `--course` or `--full`: every item by assignment group |
+| `canvas calendar` | Classes, tests and other events for the next 14 days. `--due` adds deadlines, `--days N`, `--from YYYY-MM-DD` |
 | `canvas news` | Announcements from the last 14 days. `--unread`, `--full`, `--days N` |
+| `canvas modules [MATCH]` | Each course's modules. With `--course`, a name, or `--full`: their files, pages, quizzes and links, with what's done |
+| `canvas syllabus` | Which courses have a syllabus. `--course` or `--full` prints it |
 | `canvas pages [MATCH]` | Course Pages by title. `--full` prints them |
+| `canvas discussions [MATCH]` | Discussion topics with unread counts. Name one, or `--full`, for the whole thread. `--unread` |
+| `canvas inbox [MATCH]` | Canvas Inbox conversations. `--unread`, `--scope sent\|starred\|archived`, `--full` for whole threads |
 | `canvas quizzes [MATCH]` | Quizzes with due dates and scores. Name one, or `--full`, for settings and attempts |
 | `canvas sync FOLDER` | Copy every course's Files into `FOLDER`. `--watch SECONDS` keeps it running |
 | `canvas submit ASSIGNMENT FILE...` | Hand in files, after a confirmation. `--dry-run`, `--yes` |
@@ -65,6 +73,39 @@ Every course command accepts:
   to make it the default.
 - `--all-courses`: include courses whose term has ended. These are hidden by
   default because many Canvas sites leave old enrolments active.
+- `--json`: print one JSON document instead of text (see below).
+
+`inbox` covers your whole account unless you pass `--course` or `--term`.
+
+### Reading never marks anything read
+
+The `inbox` and `discussions` commands leave Canvas's unread markers exactly as
+they were, including with `--full`. Read a thread in the terminal, and it is
+still unread on the website.
+
+### JSON output
+
+Add `--json`, before or after the command, and the command prints a single
+JSON document on stdout instead of text. Use it for scripts, `jq`, or other
+tools:
+
+```sh
+canvas todo --json | jq '.assignments[] | select(.status == "overdue") | .name'
+canvas grades --course CS101 --json
+```
+
+- Times are ISO 8601 with your local offset, for example
+  `"2026-10-20T23:59:00+08:00"`.
+- Every record names its course as `{"id", "code", "name"}`.
+- Filters such as `--course`, `--unread` and `--days` still apply. The text
+  view's display limits do not: `todo --json` lists every assignment, each with
+  a `status` of `overdue`, `todo`, `done`, `missed`, `undated` or `untracked`.
+- `--full` adds bodies, threads, quiz settings and attempts where the text view
+  would show them.
+- Errors still go to stderr with a non-zero exit code. `sync --json` sends its
+  progress to stderr and prints the counts as JSON.
+- `submit --json` never prompts. It needs `--dry-run`, which prints the plan,
+  or `--yes`, which submits and prints the result.
 
 ### How `todo` sorts assignments
 
@@ -119,8 +160,11 @@ conflicts.
 - **New Quizzes:** settings and attempts cannot be read with a student
   token, so only the due date and whether it was submitted are shown.
 - **Text-entry and URL submissions:** only file uploads.
-- **Other content:** discussions (other than announcements), grades
-  summaries, and group files.
+- **Writing anything other than submissions:** replying to discussions, sending
+  messages, and marking items read or unread.
+- **Hidden totals:** courses that hide totals from students, as many do, show
+  "total hidden". Per-item scores still appear.
+- **Group pages and group files.**
 - **Windows:** `sync` needs `fcntl`. The other commands should work but are
   untested.
 

@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from html.parser import HTMLParser
+import json
 import os
 import re
 import sys
@@ -16,6 +17,16 @@ def colours(stream=None):
     if not stream.isatty() or os.environ.get("NO_COLOR") or os.environ.get("TERM") == "dumb":
         return dict.fromkeys(NAMES, "")
     return dict(zip(NAMES, CODES))
+
+
+def emit(data):
+    """Print one JSON document. Datetimes become ISO 8601 with their offset."""
+    def default(value):
+        if isinstance(value, datetime):
+            return value.isoformat()
+        raise TypeError(f"{type(value).__name__} is not JSON serialisable")
+    json.dump(data, sys.stdout, indent=2, ensure_ascii=False, default=default)
+    sys.stdout.write("\n")
 
 
 def now():
@@ -50,6 +61,10 @@ def stamp(when, with_time=True):
     if when is None:
         return "no due date"
     return when.strftime("%a %d %b %H:%M" if with_time else "%a %d %b")
+
+
+def plural(count, word, many=None):
+    return f"{count} {word if count == 1 else many or word + 's'}"
 
 
 def score(value, points):

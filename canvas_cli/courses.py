@@ -8,6 +8,16 @@ def label(course):
     return course.get("course_code") or course.get("name") or str(course.get("id"))
 
 
+def ref(course):
+    """How a course appears inside other commands' JSON."""
+    return {"id": course.get("id"), "code": course.get("course_code"), "name": course.get("name")}
+
+
+def record(course, today):
+    term = course.get("term") or {}
+    return {**ref(course), "term": term.get("name"), "ended": ended(course, today)}
+
+
 def ended(course, today):
     """Past courses stay "active" on many Canvas sites; use the dates instead."""
     if course.get("restrict_enrollments_to_course_dates") and course.get("end_at"):

@@ -7,8 +7,8 @@ history are not readable with a student token.
 """
 
 from .api import UnavailableError
-from .courses import label
-from .util import colours, html_to_text, parse_time, relative, score, stamp, wrap
+from .courses import label, ref
+from .util import colours, emit, html_to_text, parse_time, relative, score, stamp, wrap
 
 KINDS = {"assignment": "graded", "practice_quiz": "practice",
          "survey": "survey", "graded_survey": "survey"}
@@ -73,17 +73,49 @@ def dates(item, today, cols):
                   f"{cols['dim']}({relative(when, today)}){cols['off']}")
 
 
-def attempts(client, course, quiz, cols):
+def fetch_attempts(client, course, quiz):
     try:
         # This list endpoint returns {"quiz_submissions": [...]}, not a bare list.
         payload = client.one(f"/api/v1/courses/{course['id']}/quizzes/{quiz['id']}/submissions")
     except UnavailableError:
         payload = {}
     subs = (payload or {}).get("quiz_submissions") or []
+    return sorted(subs, key=lambda s: s.get("attempt") or 0)
+
+
+SETTINGS = ("question_count", "points_possible", "time_limit", "allowed_attempts", "scoring_policy",
+            "one_question_at_a_time", "cant_go_back", "require_lockdown_browser", "has_access_code",
+            "shuffle_answers", "show_correct_answers", "show_correct_answers_at", "hide_results")
+
+
+def record(client, course, item, submission, engine, full):
+    """One quiz as JSON; settings and attempts only for Classic, only with --full."""
+    title = item.get("title") if engine == "classic" else item.get("name")
+    out = {"id": item.get("id"), "title": (title or "").strip(), "engine": engine,
+           "kind": KINDS.get(item.get("quiz_type"), "quiz") if engine == "classic" else "graded",
+           "course": ref(course), "due_at": parse_time(item.get("due_at")),
+           "unlock_at": parse_time(item.get("unlock_at")), "lock_at": parse_time(item.get("lock_at")),
+           "points_possible": item.get("points_possible"), "locked": bool(item.get("locked_for_user")),
+           "submitted_at": parse_time(submission.get("submitted_at")), "score": submission.get("score"),
+           "url": item.get("html_url")}
+    if full and engine == "classic":
+        out["settings"] = {key: item.get(key) for key in SETTINGS}
+        out["description"] = html_to_text(item.get("description"))
+        out["attempts"] = [{"attempt": s.get("attempt"), "score": s.get("score"),
+                            "points_possible": s.get("quiz_points_possible"),
+                            "started_at": parse_time(s.get("started_at")),
+                            "finished_at": parse_time(s.get("finished_at")),
+                            "time_spent": s.get("time_spent"), "state": s.get("workflow_state"),
+                            "attempts_left": s.get("attempts_left")}
+                           for s in fetch_attempts(client, course, item)]
+    return out
+
+
+def attempts(client, course, quiz, cols):
+    subs = fetch_attempts(client, course, quiz)
     if not subs:
         print(f"  {cols['dim']}no attempts{cols['off']}")
         return
-    subs = sorted(subs, key=lambda s: s.get("attempt") or 0)
     for sub in subs:
         finished = parse_time(sub.get("finished_at"))
         when = finished.strftime("%d %b %H:%M") if finished else "unfinished"
@@ -129,6 +161,12 @@ def run(client, args, courses, today):
         classic, new, submissions = fetch(client, course, args.match)
         if classic or new:
             found.append((course, classic, new, submissions))
+    if args.json:
+        emit([record(client, course, q, submissions.get(q.get("assignment_id"), {}), "classic", args.full)
+              for course, classic, _, submissions in found for q in classic]
+             + [record(client, course, a, a.get("submission") or {}, "new", args.full)
+                for course, _, new, _ in found for a in new])
+        return
     if not found:
         print("No quizzes found." + (" Try a different match." if args.match else ""))
         return

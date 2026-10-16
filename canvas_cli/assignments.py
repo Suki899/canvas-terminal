@@ -3,8 +3,8 @@
 import argparse
 from datetime import datetime, timezone
 
-from .courses import label
-from .util import colours, parse_time, relative, score, stamp
+from .courses import label, ref
+from .util import colours, emit, parse_time, relative, score, stamp
 
 # Gradebook placeholders that cannot be handed in through Canvas.
 UNSUBMITTABLE = {"none", "on_paper", "not_graded", "wiki_page", "external_tool"}
@@ -73,6 +73,27 @@ def note(assignment, today, cols):
     return f"  {cols['dim']}({'; '.join(notes)}){cols['off']}" if notes else ""
 
 
+def record(course, assignment, status, due):
+    submission = assignment.get("submission") or {}
+    return {
+        "id": assignment.get("id"), "name": (assignment.get("name") or "").strip(),
+        "course": ref(course), "status": status, "due_at": due,
+        "unlock_at": parse_time(assignment.get("unlock_at")), "lock_at": parse_time(assignment.get("lock_at")),
+        "points_possible": assignment.get("points_possible"),
+        "submission_types": assignment.get("submission_types") or [],
+        "locked": bool(assignment.get("locked_for_user")),
+        "submitted_at": parse_time(submission.get("submitted_at")),
+        "score": submission.get("score"), "excused": bool(submission.get("excused")),
+        "url": assignment.get("html_url"),
+    }
+
+
+def records(buckets):
+    """Every assignment, in due order, each carrying its bucket as status."""
+    rows = [record(c, a, name, due) for name in BUCKETS for c, a, due in buckets[name]]
+    return sorted(rows, key=lambda r: (r["due_at"] or LAST, r["course"]["code"] or "", r["name"]))
+
+
 def render(title, rows, today, cols, colour=""):
     if not rows:
         return
@@ -88,6 +109,9 @@ def run(client, args, courses, today):
     cols = colours()
     buckets = bucket(fetch(client, courses), today)
     soon, later = split_soon(buckets["todo"], today, args.days)
+    if args.json:
+        emit({"days": args.days, "assignments": records(buckets)})
+        return
 
     render("OVERDUE", buckets["overdue"], today, cols, cols["red"])
     render(f"DUE IN THE NEXT {args.days} DAYS", soon, today, cols, cols["yellow"])

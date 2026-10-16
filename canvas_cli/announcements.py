@@ -2,8 +2,8 @@
 
 from datetime import datetime, timezone
 
-from .courses import label
-from .util import colours, html_to_text, parse_time, relative, wrap
+from .courses import label, ref
+from .util import colours, emit, html_to_text, parse_time, relative, wrap
 
 OLDEST = datetime.min.replace(tzinfo=timezone.utc)
 
@@ -30,14 +30,28 @@ def gist(body, width=96):
     return pick[:width] + ("…" if len(pick) > width else "")
 
 
+def wanted(args, item, posted, today):
+    if args.unread:
+        return unread(item)
+    return not posted or (today - posted).days <= args.days
+
+
+def record(course, item, posted):
+    author = item.get("author") or {}
+    return {"id": item.get("id"), "title": (item.get("title") or "").strip(), "course": ref(course),
+            "posted_at": posted, "unread": unread(item), "author": author.get("display_name"),
+            "message": html_to_text(item.get("message")), "url": item.get("html_url")}
+
+
 def run(client, args, courses, today):
     cols = colours()
     items = fetch(client, courses)
+    if args.json:
+        emit([record(c, i, p) for c, i, p in items if wanted(args, i, p, today)])
+        return
     shown = 0
     for course, item, posted in items:
-        if args.unread and not unread(item):
-            continue
-        if not args.unread and posted and (today - posted).days > args.days:
+        if not wanted(args, item, posted, today):
             continue
         shown += 1
         mark = f"{cols['cyan']}●{cols['off']}" if unread(item) else " "
