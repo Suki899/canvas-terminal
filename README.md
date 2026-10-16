@@ -24,7 +24,7 @@ UNREAD ANNOUNCEMENTS
 ## Install
 
 ```sh
-pipx install git+<repository URL>      # or, from a clone:
+pipx install git+https://github.com/Suki899/canvas-cli   # or, from a clone:
 python3 -m pip install --user .
 ```
 
@@ -133,3 +133,7 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 
 The tests use simulated Canvas responses and need no credentials. CI runs them
 on Linux and macOS with Python 3.10 and 3.14.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).
