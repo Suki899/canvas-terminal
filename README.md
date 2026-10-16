@@ -1,4 +1,4 @@
-# canvas-cli
+# canvas-terminal
 
 Your Canvas LMS courses from the terminal: what is due, grades, announcements,
 modules, pages, the syllabus, discussions, your inbox, calendar events,
