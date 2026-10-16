@@ -205,3 +205,27 @@ class UtilTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TerminalSafetyTests(unittest.TestCase):
+    """Text from other people must not reach the terminal as control sequences."""
+
+    def test_listing_strips_escape_sequences_and_bidi_overrides(self):
+        client = Client("https://canvas.example", "t")
+        self.addCleanup(client.close)
+        client.session.get = Mock(return_value=Response([{"title": "Hi\x1b[2J\x1b]0;pwned\x07 ‮evil\r", "n": 1}]))
+        self.assertEqual(client.listing("/api/v1/x"), [{"title": "Hi[2J]0;pwned evil", "n": 1}])
+
+    def test_html_entities_cannot_smuggle_escape(self):
+        # &#x9b; decodes to "›" under HTML rules; &#27; would be a raw ESC.
+        text = html_to_text("<p>a&#27;[31mb&#x9b;c&#x202e;d</p>")
+        self.assertEqual(text, "a[31mb›cd")
+        self.assertFalse(any(ord(ch) < 32 or 0x7f <= ord(ch) <= 0x9f for ch in text))
+
+    def test_post_rejects_plain_http(self):
+        client = Client("https://canvas.example", "t")
+        self.addCleanup(client.close)
+        client.session.post = Mock()
+        with self.assertRaises(CanvasError):
+            client.post("http://storage.example/up")
+        client.session.post.assert_not_called()

@@ -13,7 +13,7 @@ from urllib.parse import urljoin
 
 from .api import CanvasError, REDIRECTS
 from .courses import label, ref
-from .util import colours, emit, parse_time, relative, stamp
+from .util import colours, emit, parse_time, relative, scrub, stamp
 
 UPLOAD = "online_upload"
 
@@ -83,7 +83,7 @@ def describe(assignment, course, paths, today, cols):
 def json_of(response):
     try:
         with response:
-            return response.json()
+            return scrub(response.json())
     except ValueError as exc:
         raise CanvasError("Canvas returned an invalid upload response.") from exc
 

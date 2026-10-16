@@ -8,6 +8,27 @@ import re
 import sys
 import textwrap
 
+# Control characters (except newline and tab) and bidi overrides. Canvas text is
+# written by other people; printed raw, these can move the cursor, rewrite
+# earlier lines, or disguise what a line says.
+UNSAFE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]")
+
+
+def clean(text):
+    return UNSAFE.sub("", text)
+
+
+def scrub(value):
+    """clean() every string inside a decoded JSON value."""
+    if isinstance(value, str):
+        return clean(value)
+    if isinstance(value, list):
+        return [scrub(v) for v in value]
+    if isinstance(value, dict):
+        return {k: scrub(v) for k, v in value.items()}
+    return value
+
+
 NAMES = ("red", "yellow", "green", "cyan", "dim", "bold", "off")
 CODES = ("\033[31m", "\033[33m", "\033[32m", "\033[36m", "\033[2m", "\033[1m", "\033[0m")
 
@@ -125,7 +146,7 @@ class _TextExtractor(HTMLParser):
             return label if bare in label else f"{label} <{href}>"
 
         out = re.sub(r"\0LINK:(.*?)\0([^\0\n]*)", link, "".join(self.parts))
-        out = out.replace("\0", "").replace("\xa0", " ")
+        out = clean(out.replace("\0", "").replace("\xa0", " "))
         out = re.sub(r"[ \t]+", " ", out)
         out = re.sub(r" *\n *", "\n", out)
         out = re.sub(r"\n{3,}", "\n\n", out)

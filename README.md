@@ -26,7 +26,7 @@ UNREAD ANNOUNCEMENTS
 ## Install
 
 ```sh
-pipx install git+https://github.com/Suki899/canvas-cli   # or, from a clone:
+pipx install git+https://github.com/Suki899/canvas-terminal   # or, from a clone:
 python3 -m pip install --user .
 ```
 
@@ -178,6 +178,15 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 The tests use simulated Canvas responses and need no credentials. CI runs them
 on Linux and macOS with Python 3.10 and 3.14.
 
+## Security
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md). Please don't open a
+public issue.
+
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
+
+Canvas is a trademark of Instructure, Inc. canvas-terminal is an independent
+project, not affiliated with or endorsed by Instructure. It uses the public
+Canvas REST API with a token you create yourself.

@@ -7,6 +7,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from .util import scrub
+
 TIMEOUT = (10, 60)
 REDIRECTS = (301, 302, 303, 307, 308)
 
@@ -125,8 +127,9 @@ class Client:
 
     def post(self, url, *, data=None, files=None):
         """POST once (never retried: a repeat could submit twice)."""
-        if not url.startswith("https://"):
+        if url.startswith("/"):
             url = self.url + url
+        origin(url)  # HTTPS only, no embedded credentials
         try:
             response = self.session.post(url, headers=self._headers(url), data=data, files=files,
                                          timeout=(10, 300), allow_redirects=False)
@@ -139,7 +142,7 @@ class Client:
     def one(self, path):
         with self.get(self.url + path) as response:
             try:
-                return response.json()
+                return scrub(response.json())
             except ValueError as exc:
                 raise CanvasError("Canvas returned an invalid API response.") from exc
 
@@ -158,7 +161,7 @@ class Client:
                     raise CanvasError("Canvas returned an invalid API response.") from exc
                 if not isinstance(page, list) or not all(isinstance(item, dict) for item in page):
                     raise CanvasError("Canvas returned an invalid list response.")
-                result.extend(page)
+                result.extend(scrub(page))
                 next_url = response.links.get("next", {}).get("url")
                 url = urljoin(url, next_url) if next_url else None
         return result
